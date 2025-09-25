@@ -1,51 +1,89 @@
-import { Stack, Tabs } from "expo-router";
-import Feather from "@expo/vector-icons/Feather";
-import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
-import AntDesign from "@expo/vector-icons/AntDesign";
-import { theme } from "../theme";
+import "./utils/setupPolyfills"; // Must be first import
+import React, { useEffect, useState } from "react";
+import { Stack } from "expo-router";
+import { QueryProvider } from "./providers/QueryProvider";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { useAuthStore } from "./store/authStore";
+import { authService } from "./services/AuthService";
+import { View, ActivityIndicator } from "react-native";
+import "../global.css";
 
-export default function Layout() {
+export default function RootLayout() {
+  const { isAuthenticated, setUser, setSession, setLoading } = useAuthStore();
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  console.log("RootLayout render - isAuthenticated:", isAuthenticated);
+
+  useEffect(() => {
+    // Initialize auth and check for existing session
+    const initializeAuth = async () => {
+      try {
+        // Check for existing session
+        const sessionResponse = await authService.getSession();
+
+        if (sessionResponse.data) {
+          // Session exists, get user profile
+          const profileResponse = await authService.getStoredProfile();
+          if (profileResponse) {
+            setUser(profileResponse as any);
+            setSession(sessionResponse.data as any);
+          }
+        }
+      } catch (error) {
+        console.error("Error initializing auth:", error);
+      } finally {
+        setLoading(false);
+        setIsInitializing(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
+
+  // Log when auth state changes
+  useEffect(() => {
+    console.log("Auth state changed in layout - isAuthenticated:", isAuthenticated);
+  }, [isAuthenticated]);
+
+  if (isInitializing) {
+    // Show loading screen while checking auth status
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator size="large" color="#FF6F00" />
+      </View>
+    );
+  }
+
   return (
-    // <Stack>
-    //   <Stack.Screen name="index" options={{ title: "Shopping list" }} />
-    //   <Stack.Screen
-    //     name="counter"
-    //     options={{ title: "Counter", presentation: "modal" }}
-    //   />
-    //   <Stack.Screen
-    //     name="idea"
-    //     options={{ title: "My idea", presentation: "modal" }}
-    //   />
-    // </Stack>
-    <Tabs>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Shopping list",
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="list" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="counter"
-        options={{
-          title: "Counter",
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <AntDesign name="clockcircleo" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="idea"
-        options={{
-          title: "My idea",
-          tabBarIcon: ({ color, size }) => (
-            <FontAwesome5 name="lightbulb" size={size} color={color} />
-          ),
-        }}
-      />
-    </Tabs>
+    <ThemeProvider>
+      <QueryProvider>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: "#FAF9F7" },
+          }}
+        >
+          {isAuthenticated ? (
+            // Authenticated routes
+            <Stack.Screen 
+              name="(tabs)" 
+              options={{ 
+                headerShown: false,
+                animation: "fade"
+              }} 
+            />
+          ) : (
+            // Auth routes
+            <Stack.Screen 
+              name="(auth)" 
+              options={{ 
+                headerShown: false,
+                animation: "fade"
+              }} 
+            />
+          )}
+        </Stack>
+      </QueryProvider>
+    </ThemeProvider>
   );
 }
