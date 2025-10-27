@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useRef } from "react";
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  ActivityIndicator, 
+import {
+  View,
+  Text,
+  ScrollView,
+  ActivityIndicator,
   RefreshControl,
   Animated,
   Dimensions
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, IconButton } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { groupService } from "../services/GroupService";
@@ -99,7 +100,7 @@ export default function GroupsScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 bg-background">
+      <SafeAreaView edges={['left', 'right']} className="flex-1 bg-background">
         <View className="p-4">
           <View className="h-12 bg-gray-200 rounded-lg mb-6 opacity-50" />
           {[1, 2, 3].map((i) => (
@@ -115,12 +116,13 @@ export default function GroupsScreen() {
             </View>
           ))}
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ScrollView 
+    <SafeAreaView edges={['left', 'right']} className="flex-1 bg-background">
+      <ScrollView 
       className="flex-1 bg-background"
       refreshControl={
         <RefreshControl
@@ -357,6 +359,7 @@ export default function GroupsScreen() {
           </View>
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, ScrollView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthStore } from "../store/authStore";
 import { Card } from "../components/ui/Card";
 
@@ -7,8 +8,9 @@ export default function DashboardScreen() {
   const { user } = useAuthStore();
 
   return (
-    <ScrollView className="flex-1 bg-background">
-      <View className="p-4">
+    <SafeAreaView edges={['left', 'right']} className="flex-1 bg-background">
+      <ScrollView className="flex-1 bg-background">
+        <View className="p-4">
         <Text className="text-3xl font-bold text-text-primary mb-2">
           Welcome back, {user?.username || "User"}!
         </Text>
@@ -42,7 +44,8 @@ export default function DashboardScreen() {
             You're not in any groups yet
           </Text>
         </Card>
-      </View>
-    </ScrollView>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

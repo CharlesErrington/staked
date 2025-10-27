@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { useRouter } from "expo-router";
@@ -87,27 +88,28 @@ export default function SignUpScreen() {
         console.error('📘 SignUp component - Error:', response.error);
         Alert.alert("Sign Up Failed", response.error.message);
       } else if (response.data) {
+        const authData = response.data;
         Alert.alert(
-          "Success!", 
+          "Success!",
           "Your account has been created. Please check your email to verify your account.",
           [
             {
               text: "OK",
               onPress: () => {
                 // Auto sign in if session exists
-                if (response.data.session) {
+                if (authData.session && authData.user) {
                   console.log('📘 SignUp - Auto signing in with session');
-                  const user = response.data.profile || {
-                    id: response.data.user.id,
-                    email: response.data.user.email,
-                    username: response.data.user.user_metadata?.username || response.data.user.email.split('@')[0],
-                    full_name: response.data.user.user_metadata?.full_name || '',
+                  const user = authData.profile || {
+                    id: authData.user.id,
+                    email: authData.user.email,
+                    username: authData.user.user_metadata?.username || authData.user.email?.split('@')[0],
+                    full_name: authData.user.user_metadata?.full_name || '',
                     email_notifications: true,
                     push_notifications: true,
                     timezone: 'America/New_York'
                   };
                   console.log('📘 SignUp - Using user object:', user);
-                  signIn(user as any, response.data.session as any);
+                  signIn(user as any, authData.session as any);
                 } else {
                   console.log('📘 SignUp - No session, redirecting to signin');
                   router.replace("/(auth)/signin");
@@ -125,11 +127,12 @@ export default function SignUpScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1 bg-[#FAF9F7]"
-    >
-      <ScrollView 
+    <SafeAreaView edges={['top', 'left', 'right', 'bottom']} className="flex-1 bg-[#FAF9F7]">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        className="flex-1"
+      >
+        <ScrollView 
         className="flex-1"
         contentContainerStyle={{ flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
@@ -213,7 +216,8 @@ export default function SignUpScreen() {
             </Text>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

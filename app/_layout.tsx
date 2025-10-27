@@ -6,6 +6,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { useAuthStore } from "./store/authStore";
 import { authService } from "./services/AuthService";
 import { View, ActivityIndicator } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import "../global.css";
 
 export default function RootLayout() {
@@ -28,9 +29,15 @@ export default function RootLayout() {
             setUser(profileResponse as any);
             setSession(sessionResponse.data as any);
           }
+        } else if (sessionResponse.error) {
+          // If there's an error getting session (invalid refresh token, etc.), clear everything
+          console.log("Session error detected, clearing stored data:", sessionResponse.error.message);
+          await authService.signOut();
         }
       } catch (error) {
         console.error("Error initializing auth:", error);
+        // Clear any corrupted data
+        await authService.signOut();
       } finally {
         setLoading(false);
         setIsInitializing(false);
@@ -55,35 +62,37 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider>
-      <QueryProvider>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: "#FAF9F7" },
-          }}
-        >
-          {isAuthenticated ? (
-            // Authenticated routes
-            <Stack.Screen 
-              name="(tabs)" 
-              options={{ 
-                headerShown: false,
-                animation: "fade"
-              }} 
-            />
-          ) : (
-            // Auth routes
-            <Stack.Screen 
-              name="(auth)" 
-              options={{ 
-                headerShown: false,
-                animation: "fade"
-              }} 
-            />
-          )}
-        </Stack>
-      </QueryProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <QueryProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: "#FAF9F7" },
+            }}
+          >
+            {isAuthenticated ? (
+              // Authenticated routes
+              <Stack.Screen
+                name="(tabs)"
+                options={{
+                  headerShown: false,
+                  animation: "fade"
+                }}
+              />
+            ) : (
+              // Auth routes
+              <Stack.Screen
+                name="(auth)"
+                options={{
+                  headerShown: false,
+                  animation: "fade"
+                }}
+              />
+            )}
+          </Stack>
+        </QueryProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

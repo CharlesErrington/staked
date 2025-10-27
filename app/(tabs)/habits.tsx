@@ -1,10 +1,12 @@
 import React from "react";
 import { View, Text, ScrollView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function HabitsScreen() {
   return (
-    <ScrollView className="flex-1 bg-background">
-      <View className="p-4">
+    <SafeAreaView edges={['left', 'right']} className="flex-1 bg-background">
+      <ScrollView className="flex-1 bg-background">
+        <View className="p-4">
         <Text className="text-2xl font-bold text-text-primary mb-6">
           Habits
         </Text>
@@ -17,7 +19,8 @@ export default function HabitsScreen() {
             Join a group to start tracking habits
           </Text>
         </View>
-      </View>
-    </ScrollView>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

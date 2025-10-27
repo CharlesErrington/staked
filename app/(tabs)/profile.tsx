@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, ScrollView } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { useAuthStore } from "../store/authStore";
@@ -17,8 +18,9 @@ export default function ProfileScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-background">
-      <View className="p-4">
+    <SafeAreaView edges={['left', 'right']} className="flex-1 bg-background">
+      <ScrollView className="flex-1 bg-background">
+        <View className="p-4">
         <View className="items-center mb-6">
           <View className="w-24 h-24 bg-gray-300 rounded-full mb-4" />
           <Text className="text-2xl font-bold text-text-primary">
@@ -51,14 +53,15 @@ export default function ProfileScreen() {
           </View>
         </Card>
 
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           onPress={handleSignOut}
           className="mt-4"
         >
           Sign Out
         </Button>
-      </View>
-    </ScrollView>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

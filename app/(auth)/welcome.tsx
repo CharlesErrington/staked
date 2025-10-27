@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "../components/ui/Button";
 import { useRouter } from "expo-router";
 
@@ -7,7 +8,8 @@ export default function WelcomeScreen() {
   const router = useRouter();
 
   return (
-    <View className="flex-1 bg-[#FAF9F7] px-6 justify-center">
+    <SafeAreaView edges={['top', 'left', 'right', 'bottom']} className="flex-1 bg-[#FAF9F7]">
+      <View className="flex-1 px-6 justify-center">
       <View className="items-center mb-12">
         {/* Logo placeholder - replace with actual logo */}
         <View className="w-32 h-32 bg-orange-500 rounded-3xl mb-6 shadow-lg" />
@@ -41,6 +43,7 @@ export default function WelcomeScreen() {
       <Text className="text-center text-text-secondary text-sm mt-8">
         By continuing, you agree to our Terms of Service and Privacy Policy
       </Text>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }

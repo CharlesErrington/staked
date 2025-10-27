@@ -18,6 +18,13 @@ export interface Group {
     allow_late_checkins: boolean;
     notification_settings: Record<string, any>;
   };
+  // Optional enriched properties from queries/aggregations
+  is_admin?: boolean;
+  member_count?: number;
+  total_habits?: number;
+  active_habits?: number;
+  next_checkin?: string;
+  completion_rate?: number;
 }
 
 export interface GroupMember {
@@ -88,9 +95,9 @@ class GroupService extends BaseService {
         .single();
       
       if (groupError) {
-        return this.createResponse(null, groupError);
+        return this.createResponse<Group>(null, groupError);
       }
-      
+
       // Add creator as owner
       const { error: memberError } = await supabase
         .from('group_members')
@@ -100,16 +107,16 @@ class GroupService extends BaseService {
           role: 'owner',
           is_active: true,
         });
-      
+
       if (memberError) {
         // Rollback group creation
         await supabase.from('groups').delete().eq('id', group.id);
-        return this.createResponse(null, memberError);
+        return this.createResponse<Group>(null, memberError);
       }
-      
+
       return this.createResponse(group, null);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<Group>(null, error as Error);
     }
   }
   
@@ -130,13 +137,14 @@ class GroupService extends BaseService {
         .eq('is_active', true)
         .eq('is_archived', false)
         .order('created_at', { ascending: false });
-      
+
+
       return this.createResponse(data, error);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<Group[]>(null, error as Error);
     }
   }
-  
+
   // Get group details with members
   async getGroupWithMembers(groupId: string): Promise<ServiceResponse<{
     group: Group;
@@ -149,11 +157,12 @@ class GroupService extends BaseService {
         .select('*')
         .eq('id', groupId)
         .single();
-      
+
+
       if (groupError) {
-        return this.createResponse(null, groupError);
+        return this.createResponse<{ group: Group; members: GroupMember[] }>(null, groupError);
       }
-      
+
       // Get members
       const { data: members, error: membersError } = await supabase
         .from('group_members')
@@ -168,14 +177,14 @@ class GroupService extends BaseService {
         `)
         .eq('group_id', groupId)
         .eq('is_active', true);
-      
+
       if (membersError) {
-        return this.createResponse(null, membersError);
+        return this.createResponse<{ group: Group; members: GroupMember[] }>(null, membersError);
       }
-      
+
       return this.createResponse({ group, members }, null);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<{ group: Group; members: GroupMember[] }>(null, error as Error);
     }
   }
   
@@ -189,22 +198,23 @@ class GroupService extends BaseService {
         .eq('id', groupId)
         .eq('is_active', true)
         .single();
-      
+
+
       if (groupError || !group) {
-        return this.createResponse(null, new Error('Group not found or inactive'));
+        return this.createResponse<GroupMember>(null, new Error('Group not found or inactive'));
       }
-      
+
       // Check member count
       const { count } = await supabase
         .from('group_members')
         .select('*', { count: 'exact', head: true })
         .eq('group_id', groupId)
         .eq('is_active', true);
-      
+
       if (count && count >= group.max_members) {
-        return this.createResponse(null, new Error('Group is full'));
+        return this.createResponse<GroupMember>(null, new Error('Group is full'));
       }
-      
+
       // Add member
       const { data, error } = await supabase
         .from('group_members')
@@ -216,10 +226,10 @@ class GroupService extends BaseService {
         })
         .select()
         .single();
-      
+
       return this.createResponse(data, error);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<GroupMember>(null, error as Error);
     }
   }
   
@@ -237,10 +247,10 @@ class GroupService extends BaseService {
       
       return this.createResponse(null, error);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<void>(null, error as Error);
     }
   }
-  
+
   // Update group settings
   async updateGroupSettings(
     groupId: string,
@@ -266,10 +276,10 @@ class GroupService extends BaseService {
       
       return this.createResponse(null, error);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<void>(null, error as Error);
     }
   }
-  
+
   // Invite user to group
   async inviteToGroup(
     groupId: string,
@@ -293,19 +303,19 @@ class GroupService extends BaseService {
         })
         .select()
         .single();
-      
+
       if (error) {
-        return this.createResponse(null, error);
+        return this.createResponse<GroupInvitation>(null, error);
       }
-      
+
       // TODO: Send invitation email
-      
+
       return this.createResponse(data, null);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<GroupInvitation>(null, error as Error);
     }
   }
-  
+
   // Accept invitation
   async acceptInvitation(
     token: string,
@@ -319,37 +329,38 @@ class GroupService extends BaseService {
         .eq('token', token)
         .eq('status', 'pending')
         .single();
-      
+
+
       if (inviteError || !invitation) {
-        return this.createResponse(null, new Error('Invalid or expired invitation'));
+        return this.createResponse<GroupMember>(null, new Error('Invalid or expired invitation'));
       }
-      
+
       // Check expiry
       if (new Date(invitation.expires_at) < new Date()) {
         await supabase
           .from('group_invitations')
           .update({ status: 'expired' })
           .eq('id', invitation.id);
-        
-        return this.createResponse(null, new Error('Invitation has expired'));
+
+        return this.createResponse<GroupMember>(null, new Error('Invitation has expired'));
       }
-      
+
       // Join group
       const joinResult = await this.joinGroup(invitation.group_id, userId);
-      
+
       if (joinResult.error) {
         return joinResult;
       }
-      
+
       // Update invitation status
       await supabase
         .from('group_invitations')
         .update({ status: 'accepted' })
         .eq('id', invitation.id);
-      
+
       return joinResult;
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<GroupMember>(null, error as Error);
     }
   }
   
@@ -361,44 +372,44 @@ class GroupService extends BaseService {
         .from('group_members')
         .select('*')
         .eq('group_id', groupId);
-      
+
       if (membersError) {
-        return this.createResponse(null, membersError);
+        return this.createResponse<GroupStats>(null, membersError);
       }
-      
+
       const totalMembers = members.length;
       const activeMembers = members.filter(m => m.is_active).length;
-      
+
       // Get habit stats
       const { data: habits, error: habitsError } = await supabase
         .from('habits')
         .select('*')
         .eq('group_id', groupId);
-      
+
       if (habitsError) {
-        return this.createResponse(null, habitsError);
+        return this.createResponse<GroupStats>(null, habitsError);
       }
-      
+
       const totalHabits = habits.length;
       const activeHabits = habits.filter(h => h.is_active).length;
-      
+
       // Get debt stats
       const { data: debts, error: debtsError } = await supabase
         .from('debts')
         .select('amount')
         .eq('group_id', groupId)
         .eq('is_settled', false);
-      
+
       if (debtsError) {
-        return this.createResponse(null, debtsError);
+        return this.createResponse<GroupStats>(null, debtsError);
       }
-      
+
       const totalDebt = debts.reduce((sum, d) => sum + d.amount, 0);
-      
+
       // Calculate completion rate (simplified)
       // TODO: Implement proper completion rate calculation
       const completionRate = 0;
-      
+
       return this.createResponse({
         total_members: totalMembers,
         active_members: activeMembers,
@@ -408,7 +419,7 @@ class GroupService extends BaseService {
         completion_rate: completionRate,
       }, null);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<GroupStats>(null, error as Error);
     }
   }
   

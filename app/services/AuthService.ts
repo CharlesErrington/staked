@@ -115,12 +115,12 @@ class AuthService extends BaseService {
       
       if (authError) {
         console.error('❌ Auth signup error:', authError);
-        return this.createResponse(null, authError);
+        return this.createResponse<AuthState>(null, authError);
       }
 
       if (!authData.user) {
         console.error('❌ No user returned from signup');
-        return this.createResponse(null, new ServiceError('User creation failed'));
+        return this.createResponse<AuthState>(null, new ServiceError('User creation failed'));
       }
 
       console.log('✅ Auth user created:', authData.user.id, authData.user.email);
@@ -179,7 +179,7 @@ class AuthService extends BaseService {
       console.log('🔵 Final signup authState:', authState);
       return this.createResponse(authState, null);
     } catch (error) {
-      return this.createResponse(null, error as Error);
+      return this.createResponse<AuthState>(null, error as Error);
     }
   }
   
@@ -192,15 +192,15 @@ class AuthService extends BaseService {
         email: data.email,
         password: data.password,
       });
-      
+
       if (error) {
         console.error('❌ Signin error:', error);
-        return this.createResponse(null, error);
+        return this.createResponse<AuthState>(null, error);
       }
 
       if (!authData.user || !authData.session) {
         console.error('❌ No user or session returned from signin');
-        return this.createResponse(null, new ServiceError('Sign in failed'));
+        return this.createResponse<AuthState>(null, new ServiceError('Sign in failed'));
       }
 
       console.log('✅ Auth signin successful:', authData.user.id, authData.user.email);
@@ -247,10 +247,10 @@ class AuthService extends BaseService {
       console.log('🟢 Final signin authState:', authState);
       return this.createResponse(authState, null);
     } catch (error) {
-      return this.createResponse(null, error as Error);
+      return this.createResponse<AuthState>(null, error as Error);
     }
   }
-  
+
   // Sign in with OAuth provider
   async signInWithProvider(
     provider: 'google' | 'apple' | 'facebook'
@@ -262,14 +262,14 @@ class AuthService extends BaseService {
           redirectTo: 'staked://auth-callback',
         },
       });
-      
+
       if (error) {
-        return this.createResponse(null, error);
+        return this.createResponse<{ url: string }>(null, error);
       }
-      
+
       return this.createResponse({ url: data.url }, null);
     } catch (error) {
-      return this.createResponse(null, error as Error);
+      return this.createResponse<{ url: string }>(null, error as Error);
     }
   }
   
@@ -294,15 +294,20 @@ class AuthService extends BaseService {
     try {
       // First try to get from Supabase
       const { data: { session }, error } = await supabase.auth.getSession();
-      
+
       if (error) {
-        // Fallback to stored session
-        const storedSession = await this.getStoredSession();
-        return this.createResponse(storedSession, null);
+        // If there's an error (like invalid refresh token), clear stored data
+        console.log('Session error in getSession:', error.message);
+        if (error.message.includes('Refresh Token') || error.message.includes('Invalid')) {
+          await this.clearSession();
+        }
+        return this.createResponse(null, error);
       }
-      
+
       return this.createResponse(session, null);
     } catch (error) {
+      console.error('Unexpected error in getSession:', error);
+      await this.clearSession();
       return this.createResponse(null, error as Error);
     }
   }
@@ -375,20 +380,20 @@ class AuthService extends BaseService {
         .eq('id', userId)
         .select()
         .single();
-      
+
       if (error) {
-        return this.createResponse(null, error);
+        return this.createResponse<UserProfile>(null, error);
       }
-      
+
       // Update cached profile
       await this.storeProfile(data);
-      
+
       return this.createResponse(data, null);
     } catch (error) {
-      return this.createResponse(null, error as Error);
+      return this.createResponse<UserProfile>(null, error as Error);
     }
   }
-  
+
   // Upload avatar
   async uploadAvatar(
     userId: string,
@@ -405,29 +410,29 @@ class AuthService extends BaseService {
           cacheControl: '3600',
           upsert: true,
         });
-      
+
       if (uploadError) {
-        return this.createResponse(null, uploadError);
+        return this.createResponse<string>(null, uploadError);
       }
-      
+
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
         .getPublicUrl(filePath);
-      
+
       // Update user profile with avatar URL
       const { error: updateError } = await supabase
         .from('users')
         .update({ avatar_url: publicUrl })
         .eq('id', userId);
-      
+
       if (updateError) {
-        return this.createResponse(null, updateError);
+        return this.createResponse<string>(null, updateError);
       }
-      
+
       return this.createResponse(publicUrl, null);
     } catch (error) {
-      return this.createResponse(null, error as Error);
+      return this.createResponse<string>(null, error as Error);
     }
   }
   
@@ -478,7 +483,18 @@ class AuthService extends BaseService {
   
   private async clearSession(): Promise<void> {
     try {
+      // Clear custom session keys
       await AsyncStorage.multiRemove([this.SESSION_KEY, this.PROFILE_KEY]);
+
+      // Clear authStore keys
+      await AsyncStorage.multiRemove(['@session', '@user']);
+
+      // Clear all Supabase auth keys (they use a pattern like sb-<project-ref>-auth-token)
+      const allKeys = await AsyncStorage.getAllKeys();
+      const supabaseAuthKeys = allKeys.filter(key => key.includes('sb-') && key.includes('-auth-'));
+      if (supabaseAuthKeys.length > 0) {
+        await AsyncStorage.multiRemove(supabaseAuthKeys);
+      }
     } catch (error) {
       console.error('Failed to clear session:', error);
     }
@@ -515,15 +531,15 @@ class AuthService extends BaseService {
         // No rows returned means username is available
         return this.createResponse(true, null);
       }
-      
+
       if (error) {
-        return this.createResponse(null, error);
+        return this.createResponse<boolean>(null, error);
       }
-      
+
       // Username exists
       return this.createResponse(false, null);
     } catch (error) {
-      return this.createResponse(null, error as Error);
+      return this.createResponse<boolean>(null, error as Error);
     }
   }
   
