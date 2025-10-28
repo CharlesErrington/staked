@@ -25,6 +25,7 @@ export interface Group {
   active_habits?: number;
   next_checkin?: string;
   completion_rate?: number;
+  invite_code?: string;
 }
 
 export interface GroupMember {
@@ -42,12 +43,13 @@ export interface GroupMember {
 export interface GroupInvitation {
   id: string;
   group_id: string;
-  email: string;
+  invited_email?: string;
+  invited_user_id?: string;
   invited_by: string;
   status: 'pending' | 'accepted' | 'declined' | 'expired';
   created_at: string;
   expires_at: string;
-  token: string;
+  invitation_code: string;
 }
 
 export interface CreateGroupPayload {
@@ -114,7 +116,25 @@ class GroupService extends BaseService {
         return this.createResponse<Group>(null, memberError);
       }
 
-      return this.createResponse(group, null);
+      // Generate permanent invite code for the group
+      // Database trigger will auto-generate invitation_code
+      const { data: invitation, error: inviteError } = await supabase
+        .from('group_invitations')
+        .insert({
+          group_id: group.id,
+          invited_by: userData.user.id,
+        })
+        .select('invitation_code')
+        .single();
+
+      if (inviteError) {
+        console.warn('Failed to generate invite code:', inviteError);
+      }
+
+      return this.createResponse({
+        ...group,
+        invite_code: invitation?.invitation_code,
+      }, null);
     } catch (error) {
       return this.createResponse<Group>(null, error as Error);
     }
@@ -190,6 +210,22 @@ class GroupService extends BaseService {
       const totalHabits = habits?.length || 0;
       const activeHabits = habits?.filter(h => h.is_active).length || 0;
 
+      // Get permanent invite code (for admins)
+      let inviteCode: string | undefined;
+      if (membership?.role === 'owner' || membership?.role === 'admin') {
+        const { data: invitation } = await supabase
+          .from('group_invitations')
+          .select('invitation_code')
+          .eq('group_id', id)
+          .is('invited_email', null)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .single();
+
+        inviteCode = invitation?.invitation_code;
+      }
+
       // Enrich group with computed properties
       const enrichedGroup: Group = {
         ...group,
@@ -197,6 +233,7 @@ class GroupService extends BaseService {
         member_count: memberCount || 0,
         total_habits: totalHabits,
         active_habits: activeHabits,
+        invite_code: inviteCode,
       };
 
       return this.createResponse(enrichedGroup, null);
@@ -340,26 +377,21 @@ class GroupService extends BaseService {
     }
   }
 
-  // Invite user to group
+  // Invite user to group by email
   async inviteToGroup(
     groupId: string,
     email: string,
     invitedBy: string
   ): Promise<ServiceResponse<GroupInvitation>> {
     try {
-      const token = Math.random().toString(36).substring(2, 15);
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
-      
+      // Database trigger will auto-generate invitation_code
       const { data, error } = await supabase
         .from('group_invitations')
         .insert({
           group_id: groupId,
-          email,
+          invited_email: email,
           invited_by: invitedBy,
           status: 'pending',
-          token,
-          expires_at: expiresAt.toISOString(),
         })
         .select()
         .single();
@@ -368,7 +400,7 @@ class GroupService extends BaseService {
         return this.createResponse<GroupInvitation>(null, error);
       }
 
-      // TODO: Send invitation email
+      // TODO: Send invitation email with code: data.invitation_code
 
       return this.createResponse(data, null);
     } catch (error) {
@@ -376,61 +408,9 @@ class GroupService extends BaseService {
     }
   }
 
-  // Generate a shareable invite code for the group
-  async generateInviteCode(groupId: string): Promise<ServiceResponse<{ code: string }>> {
-    try {
-      // Get current user
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        return this.createResponse<{ code: string }>(null, new Error('User not authenticated'));
-      }
-
-      // Check if user is admin/owner of the group
-      const { data: membership } = await supabase
-        .from('group_members')
-        .select('role')
-        .eq('group_id', groupId)
-        .eq('user_id', userData.user.id)
-        .eq('is_active', true)
-        .single();
-
-      if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
-        return this.createResponse<{ code: string }>(null, new Error('Only admins can generate invite codes'));
-      }
-
-      // Generate a short, user-friendly code (6 characters, uppercase alphanumeric)
-      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
-
-      // Store in invitations table with special marker
-      const { data, error } = await supabase
-        .from('group_invitations')
-        .insert({
-          group_id: groupId,
-          email: 'CODE_BASED_INVITE',
-          invited_by: userData.user.id,
-          status: 'pending',
-          token: code,
-          expires_at: expiresAt.toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) {
-        return this.createResponse<{ code: string }>(null, error);
-      }
-
-      return this.createResponse({ code }, null);
-    } catch (error) {
-      return this.createResponse<{ code: string }>(null, error as Error);
-    }
-  }
-
-  // Accept invitation
+  // Accept invitation by code
   async acceptInvitation(
-    token: string,
+    code: string,
     userId: string
   ): Promise<ServiceResponse<GroupMember>> {
     try {
@@ -438,7 +418,7 @@ class GroupService extends BaseService {
       const { data: invitation, error: inviteError } = await supabase
         .from('group_invitations')
         .select('*')
-        .eq('token', token)
+        .eq('invitation_code', code)
         .eq('status', 'pending')
         .single();
 

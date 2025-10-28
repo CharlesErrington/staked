@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as Clipboard from 'expo-clipboard';
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { groupService } from "../../services/GroupService";
@@ -11,8 +12,6 @@ export default function GroupDetailScreen() {
   const router = useRouter();
   const [group, setGroup] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
-  const [generatingCode, setGeneratingCode] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -42,28 +41,14 @@ export default function GroupDetailScreen() {
     }
   };
 
-  const handleGenerateInviteCode = async () => {
-    if (!group) return;
-    
-    setGeneratingCode(true);
+  const handleCopyCode = async () => {
+    if (!group?.invite_code) return;
+
     try {
-      const { data, error } = await groupService.generateInviteCode(group.id);
-      if (data && !error) {
-        setInviteCode(data.code);
-        Alert.alert(
-          "Invitation Code Generated",
-          `Share this code with friends: ${data.code}`,
-          [
-            { text: "OK" }
-          ]
-        );
-      } else {
-        Alert.alert("Error", "Failed to generate invitation code");
-      }
+      await Clipboard.setStringAsync(group.invite_code);
+      Alert.alert("Copied!", "Invitation code copied to clipboard");
     } catch (error) {
-      Alert.alert("Error", "Something went wrong");
-    } finally {
-      setGeneratingCode(false);
+      Alert.alert("Error", "Failed to copy code");
     }
   };
 
@@ -136,35 +121,30 @@ export default function GroupDetailScreen() {
           </Card>
         </View>
 
-        {/* Admin Actions */}
-        {group.is_admin && (
+        {/* Invite Code */}
+        {group.is_admin && group.invite_code && (
           <Card className="p-4 mb-6">
             <Text className="text-sm font-semibold text-text-primary mb-3">
-              Admin Actions
+              Invite Code
             </Text>
-            <View className="gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onPress={handleGenerateInviteCode}
-                disabled={generatingCode}
-              >
-                {generatingCode ? "Generating..." : "Generate Invite Code"}
-              </Button>
-              {inviteCode && (
-                <View className="bg-primary-50 p-3 rounded mt-2">
-                  <Text className="text-xs text-primary-600 mb-1">
-                    Share this code:
-                  </Text>
-                  <Text className="text-lg font-mono font-bold text-primary-700">
-                    {inviteCode}
-                  </Text>
-                  <Text className="text-xs text-primary-600 mt-1">
-                    Valid for 7 days
-                  </Text>
-                </View>
-              )}
+            <View className="bg-calm-blue-50 p-4 rounded-lg mb-3">
+              <Text className="text-xs text-text-secondary mb-2">
+                Share this code with friends:
+              </Text>
+              <Text className="text-2xl font-mono font-bold text-calm-blue-600 text-center mb-1">
+                {group.invite_code}
+              </Text>
+              <Text className="text-xs text-text-secondary text-center">
+                Never expires
+              </Text>
             </View>
+            <Button
+              variant="secondary"
+              size="sm"
+              onPress={handleCopyCode}
+            >
+              Copy Code
+            </Button>
           </Card>
         )}
 

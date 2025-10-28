@@ -3487,6 +3487,11 @@ expo-asset@~11.1.5:
     "@expo/image-utils" "^0.7.4"
     expo-constants "~17.1.5"
 
+expo-clipboard@^8.0.7:
+  version "8.0.7"
+  resolved "https://registry.npmjs.org/expo-clipboard/-/expo-clipboard-8.0.7.tgz"
+  integrity sha512-zvlfFV+wB2QQrQnHWlo0EKHAkdi2tycLtE+EXFUWTPZYkgu1XcH+aiKfd4ul7Z0SDF+1IuwoiW9AA9eO35aj3Q==
+
 expo-constants@*, expo-constants@~17.1.5, expo-constants@~17.1.6:
   version "17.1.6"
   resolved "https://registry.npmjs.org/expo-constants/-/expo-constants-17.1.6.tgz"
