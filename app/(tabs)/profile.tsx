@@ -14,7 +14,7 @@ export default function ProfileScreen() {
   const handleSignOut = async () => {
     await authService.signOut();
     await signOut();
-    // Navigation will automatically switch to auth stack
+    router.replace('/(auth)/welcome');
   };
 
   return (

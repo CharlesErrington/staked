@@ -98,10 +98,8 @@ class AuthService extends BaseService {
   
   // Sign up new user
   async signUp(data: SignUpData): Promise<ServiceResponse<AuthState>> {
-    console.log('🔵 Starting signup process for:', data.email);
     try {
       // 1. Create auth user
-      console.log('🔵 Step 1: Creating auth user...');
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -112,62 +110,25 @@ class AuthService extends BaseService {
           },
         },
       });
-      
+
       if (authError) {
-        console.error('❌ Auth signup error:', authError);
         return this.createResponse<AuthState>(null, authError);
       }
 
       if (!authData.user) {
-        console.error('❌ No user returned from signup');
         return this.createResponse<AuthState>(null, new ServiceError('User creation failed'));
       }
 
-      console.log('✅ Auth user created:', authData.user.id, authData.user.email);
-      
-      // 2. Wait a moment for the auth user to be fully created
-      console.log('🔵 Step 2: Waiting for auth user to be fully created...');
+      // Wait for database trigger to create profile (trigger: handle_new_user)
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // 3. Create user profile in database
-      console.log('🔵 Step 3: Creating user profile in database...');
-      // Try to insert the profile - if it fails, the trigger might have already created it
-      const { data: profile, error: profileError } = await supabase
+      // Fetch the profile created by database trigger
+      const { data: userProfile } = await supabase
         .from('users')
-        .insert({
-          id: authData.user.id,
-          email: data.email,
-          username: data.username,
-          full_name: data.fullName,
-          email_notifications: true,
-          push_notifications: true,
-          timezone: 'America/New_York',
-        })
-        .select()
+        .select('*')
+        .eq('id', authData.user.id)
         .single();
-      
-      console.log('🔵 Profile insert result:', { profile, profileError });
 
-      let userProfile = profile;
-
-      // If insert failed, try to get the existing profile (trigger might have created it)
-      if (profileError && profileError.code === '23505') { // Unique violation
-        console.log('🔵 Profile already exists (trigger may have created it), fetching...');
-        const { data: existingProfile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', authData.user.id)
-          .single();
-        
-        userProfile = existingProfile;
-        console.log('🔵 Fetched existing profile:', existingProfile);
-      } else if (profileError) {
-        console.error('❌ Failed to create user profile:', profileError);
-        console.log('🔵 Continuing anyway - profile might be created by trigger');
-      } else {
-        console.log('✅ Profile created successfully:', profile);
-      }
-      
       const authState: AuthState = {
         user: authData.user,
         session: authData.session,
@@ -176,7 +137,6 @@ class AuthService extends BaseService {
         isLoading: false,
       };
 
-      console.log('🔵 Final signup authState:', authState);
       return this.createResponse(authState, null);
     } catch (error) {
       return this.createResponse<AuthState>(null, error as Error);
@@ -185,57 +145,31 @@ class AuthService extends BaseService {
   
   // Sign in existing user
   async signIn(data: SignInData): Promise<ServiceResponse<AuthState>> {
-    console.log('🟢 Starting signin process for:', data.email);
     try {
-      console.log('🟢 Step 1: Signing in with password...');
       const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       });
 
       if (error) {
-        console.error('❌ Signin error:', error);
         return this.createResponse<AuthState>(null, error);
       }
 
       if (!authData.user || !authData.session) {
-        console.error('❌ No user or session returned from signin');
         return this.createResponse<AuthState>(null, new ServiceError('Sign in failed'));
       }
 
-      console.log('✅ Auth signin successful:', authData.user.id, authData.user.email);
-      
       // Store session
-      console.log('🟢 Step 2: Storing session...');
       await this.storeSession(authData.session);
 
-      // Fetch user profile
-      console.log('🟢 Step 3: Fetching user profile...');
-      let profile = await this.fetchUserProfile(authData.user.id);
-      console.log('🟢 Profile fetch result:', profile);
-      
-      // If profile doesn't exist, create it (handles failed signups)
-      if (!profile) {
-        console.log('⚠️ No profile found, attempting to create one...');
-        const { data: newProfile, error: profileError } = await supabase
-          .from('users')
-          .insert({
-            id: authData.user.id,
-            email: authData.user.email!,
-            username: authData.user.user_metadata?.username || authData.user.email!.split('@')[0],
-            full_name: authData.user.user_metadata?.full_name,
-          })
-          .select()
-          .single();
-        
-        if (!profileError && newProfile) {
-          profile = newProfile;
-          console.log('✅ Profile created during signin:', newProfile);
-        } else if (profileError) {
-          console.error('❌ Failed to create profile during signin:', profileError);
-        }
+      // Fetch user profile (should exist from signup trigger)
+      const profile = await this.fetchUserProfile(authData.user.id);
+
+      // Store profile
+      if (profile) {
+        await this.storeProfile(profile);
       }
-      
+
       const authState: AuthState = {
         user: authData.user,
         session: authData.session,
@@ -244,7 +178,6 @@ class AuthService extends BaseService {
         isLoading: false,
       };
 
-      console.log('🟢 Final signin authState:', authState);
       return this.createResponse(authState, null);
     } catch (error) {
       return this.createResponse<AuthState>(null, error as Error);
