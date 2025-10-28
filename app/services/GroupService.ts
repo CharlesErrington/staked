@@ -145,6 +145,66 @@ class GroupService extends BaseService {
     }
   }
 
+  // Get single group by ID with enriched data
+  async getGroupById(id: string): Promise<ServiceResponse<Group>> {
+    try {
+      // Get current user
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        return this.createResponse<Group>(null, new Error('User not authenticated'));
+      }
+
+      // Get group details
+      const { data: group, error: groupError } = await supabase
+        .from('groups')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (groupError || !group) {
+        return this.createResponse<Group>(null, groupError || new Error('Group not found'));
+      }
+
+      // Check if user is a member and get their role
+      const { data: membership } = await supabase
+        .from('group_members')
+        .select('role, is_active')
+        .eq('group_id', id)
+        .eq('user_id', userData.user.id)
+        .eq('is_active', true)
+        .single();
+
+      // Get member count
+      const { count: memberCount } = await supabase
+        .from('group_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('group_id', id)
+        .eq('is_active', true);
+
+      // Get habit stats
+      const { data: habits } = await supabase
+        .from('habits')
+        .select('id, is_active')
+        .eq('group_id', id);
+
+      const totalHabits = habits?.length || 0;
+      const activeHabits = habits?.filter(h => h.is_active).length || 0;
+
+      // Enrich group with computed properties
+      const enrichedGroup: Group = {
+        ...group,
+        is_admin: membership?.role === 'owner' || membership?.role === 'admin',
+        member_count: memberCount || 0,
+        total_habits: totalHabits,
+        active_habits: activeHabits,
+      };
+
+      return this.createResponse(enrichedGroup, null);
+    } catch (error) {
+      return this.createResponse<Group>(null, error as Error);
+    }
+  }
+
   // Get group details with members
   async getGroupWithMembers(groupId: string): Promise<ServiceResponse<{
     group: Group;
@@ -313,6 +373,58 @@ class GroupService extends BaseService {
       return this.createResponse(data, null);
     } catch (error) {
       return this.createResponse<GroupInvitation>(null, error as Error);
+    }
+  }
+
+  // Generate a shareable invite code for the group
+  async generateInviteCode(groupId: string): Promise<ServiceResponse<{ code: string }>> {
+    try {
+      // Get current user
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        return this.createResponse<{ code: string }>(null, new Error('User not authenticated'));
+      }
+
+      // Check if user is admin/owner of the group
+      const { data: membership } = await supabase
+        .from('group_members')
+        .select('role')
+        .eq('group_id', groupId)
+        .eq('user_id', userData.user.id)
+        .eq('is_active', true)
+        .single();
+
+      if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+        return this.createResponse<{ code: string }>(null, new Error('Only admins can generate invite codes'));
+      }
+
+      // Generate a short, user-friendly code (6 characters, uppercase alphanumeric)
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
+
+      // Store in invitations table with special marker
+      const { data, error } = await supabase
+        .from('group_invitations')
+        .insert({
+          group_id: groupId,
+          email: 'CODE_BASED_INVITE',
+          invited_by: userData.user.id,
+          status: 'pending',
+          token: code,
+          expires_at: expiresAt.toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return this.createResponse<{ code: string }>(null, error);
+      }
+
+      return this.createResponse({ code }, null);
+    } catch (error) {
+      return this.createResponse<{ code: string }>(null, error as Error);
     }
   }
 
