@@ -19,7 +19,8 @@
       "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to update your profile picture.",
-        "NSPhotoLibraryUsageDescription": "This app uses your photo library to select a profile picture."
+        "NSPhotoLibraryUsageDescription": "This app uses your photo library to select a profile picture.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

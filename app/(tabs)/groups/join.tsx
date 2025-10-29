@@ -19,8 +19,8 @@ export default function JoinGroupScreen() {
       return;
     }
 
-    if (code.length !== 6) {
-      Alert.alert("Error", "Invitation codes are 6 characters long");
+    if (code.length !== 8) {
+      Alert.alert("Error", "Invitation codes are 8 characters long");
       return;
     }
 
@@ -73,8 +73,8 @@ export default function JoinGroupScreen() {
   const formatInviteCode = (text: string) => {
     // Remove non-alphanumeric characters and convert to uppercase
     const cleaned = text.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-    // Limit to 6 characters
-    return cleaned.slice(0, 6);
+    // Limit to 8 characters
+    return cleaned.slice(0, 8);
   };
 
   return (
@@ -99,16 +99,16 @@ export default function JoinGroupScreen() {
                 Invitation Code
               </Text>
               <Input
-                placeholder="e.g., ABC123"
+                placeholder="e.g., ABC12345"
                 value={inviteCode}
                 onChangeText={(text) => setInviteCode(formatInviteCode(text))}
                 autoCapitalize="characters"
                 autoCorrect={false}
-                maxLength={6}
+                maxLength={8}
                 className="text-center text-2xl font-mono tracking-widest"
               />
               <Text className="text-xs text-text-secondary mt-1 text-center">
-                6-character code (letters and numbers)
+                8-character code (letters and numbers)
               </Text>
             </View>
 
@@ -118,9 +118,9 @@ export default function JoinGroupScreen() {
               </Text>
               <Text className="text-xs text-primary-600">
                 • Ask the group admin to share the code{"\n"}
-                • Codes can be found in the group settings{"\n"}
-                • Each code expires after 7 days{"\n"}
-                • The admin can generate new codes anytime
+                • Find the code in the group detail page{"\n"}
+                • Each group has a permanent invite code{"\n"}
+                • Anyone with the code can join the group
               </Text>
             </View>
 
@@ -136,7 +136,7 @@ export default function JoinGroupScreen() {
               <Button
                 variant="primary"
                 onPress={handleJoinGroup}
-                disabled={loading || inviteCode.length !== 6}
+                disabled={loading || inviteCode.length !== 8}
                 className="flex-1"
               >
                 {loading ? "Joining..." : "Join Group"}

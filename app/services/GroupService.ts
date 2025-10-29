@@ -1,6 +1,6 @@
-import { BaseService, ServiceResponse } from './base/BaseService';
-import { supabase } from '../config/supabase';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import { BaseService, ServiceResponse } from "./base/BaseService";
+import { supabase } from "../config/supabase";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export interface Group {
   id: string;
@@ -32,7 +32,7 @@ export interface GroupMember {
   id: string;
   group_id: string;
   user_id: string;
-  role: 'owner' | 'admin' | 'member';
+  role: "owner" | "admin" | "member";
   is_active: boolean;
   joined_at: string;
   left_at?: string;
@@ -46,7 +46,7 @@ export interface GroupInvitation {
   invited_email?: string;
   invited_user_id?: string;
   invited_by: string;
-  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  status: "pending" | "accepted" | "declined" | "expired";
   created_at: string;
   expires_at: string;
   invitation_code: string;
@@ -57,7 +57,7 @@ export interface CreateGroupPayload {
   description?: string;
   currency_code?: string;
   max_members?: number;
-  settings?: Partial<Group['settings']>;
+  settings?: Partial<Group["settings"]>;
 }
 
 export interface GroupStats {
@@ -71,93 +71,99 @@ export interface GroupStats {
 
 class GroupService extends BaseService {
   private subscriptions: Map<string, RealtimeChannel> = new Map();
-  
+
   constructor() {
-    super('groups');
+    super("groups");
   }
-  
+
   // Create a new group
-  async createGroup(payload: CreateGroupPayload): Promise<ServiceResponse<Group>> {
+  async createGroup(
+    payload: CreateGroupPayload
+  ): Promise<ServiceResponse<Group>> {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
-      
+
       // Start a transaction
       const { data: group, error: groupError } = await supabase
-        .from('groups')
+        .from("groups")
         .insert({
           ...payload,
           created_by: userData.user.id,
-          currency_code: payload.currency_code || 'USD',
+          currency_code: payload.currency_code || "USD",
           max_members: payload.max_members || 10,
         })
         .select()
         .single();
-      
+
       if (groupError) {
         return this.createResponse<Group>(null, groupError);
       }
 
       // Add creator as owner
       const { error: memberError } = await supabase
-        .from('group_members')
+        .from("group_members")
         .insert({
           group_id: group.id,
           user_id: userData.user.id,
-          role: 'owner',
+          role: "owner",
           is_active: true,
         });
 
       if (memberError) {
         // Rollback group creation
-        await supabase.from('groups').delete().eq('id', group.id);
+        await supabase.from("groups").delete().eq("id", group.id);
         return this.createResponse<Group>(null, memberError);
       }
 
       // Generate permanent invite code for the group
       // Database trigger will auto-generate invitation_code
       const { data: invitation, error: inviteError } = await supabase
-        .from('group_invitations')
+        .from("group_invitations")
         .insert({
           group_id: group.id,
           invited_by: userData.user.id,
         })
-        .select('invitation_code')
+        .select("invitation_code")
         .single();
 
       if (inviteError) {
-        console.warn('Failed to generate invite code:', inviteError);
+        console.warn("Failed to generate invite code:", inviteError);
       }
 
-      return this.createResponse({
-        ...group,
-        invite_code: invitation?.invitation_code,
-      }, null);
+      return this.createResponse(
+        {
+          ...group,
+          invite_code: invitation?.invitation_code,
+        },
+        null
+      );
     } catch (error) {
       return this.createResponse<Group>(null, error as Error);
     }
   }
-  
+
   // Get user's groups
   async getUserGroups(userId: string): Promise<ServiceResponse<Group[]>> {
     try {
       const { data, error } = await supabase
-        .from('groups')
-        .select(`
+        .from("groups")
+        .select(
+          `
           *,
           group_members!inner(
             user_id,
             is_active
           )
-        `)
-        .eq('group_members.user_id', userId)
-        .eq('group_members.is_active', true)
-        .eq('is_active', true)
-        .eq('is_archived', false)
-        .order('created_at', { ascending: false });
-
+        `
+        )
+        .eq("group_members.user_id", userId)
+        .eq("group_members.is_active", true)
+        .eq("is_active", true)
+        .eq("is_archived", false)
+        .order("created_at", { ascending: false });
 
       return this.createResponse(data, error);
     } catch (error) {
@@ -171,55 +177,61 @@ class GroupService extends BaseService {
       // Get current user
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
-        return this.createResponse<Group>(null, new Error('User not authenticated'));
+        return this.createResponse<Group>(
+          null,
+          new Error("User not authenticated")
+        );
       }
 
       // Get group details
       const { data: group, error: groupError } = await supabase
-        .from('groups')
-        .select('*')
-        .eq('id', id)
+        .from("groups")
+        .select("*")
+        .eq("id", id)
         .single();
 
       if (groupError || !group) {
-        return this.createResponse<Group>(null, groupError || new Error('Group not found'));
+        return this.createResponse<Group>(
+          null,
+          groupError || new Error("Group not found")
+        );
       }
 
       // Check if user is a member and get their role
       const { data: membership } = await supabase
-        .from('group_members')
-        .select('role, is_active')
-        .eq('group_id', id)
-        .eq('user_id', userData.user.id)
-        .eq('is_active', true)
+        .from("group_members")
+        .select("role, is_active")
+        .eq("group_id", id)
+        .eq("user_id", userData.user.id)
+        .eq("is_active", true)
         .single();
 
       // Get member count
       const { count: memberCount } = await supabase
-        .from('group_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('group_id', id)
-        .eq('is_active', true);
+        .from("group_members")
+        .select("*", { count: "exact", head: true })
+        .eq("group_id", id)
+        .eq("is_active", true);
 
       // Get habit stats
       const { data: habits } = await supabase
-        .from('habits')
-        .select('id, is_active')
-        .eq('group_id', id);
+        .from("habits")
+        .select("id, is_active")
+        .eq("group_id", id);
 
       const totalHabits = habits?.length || 0;
-      const activeHabits = habits?.filter(h => h.is_active).length || 0;
+      const activeHabits = habits?.filter((h) => h.is_active).length || 0;
 
       // Get permanent invite code (for admins)
       let inviteCode: string | undefined;
-      if (membership?.role === 'owner' || membership?.role === 'admin') {
+      if (membership?.role === "owner" || membership?.role === "admin") {
         const { data: invitation } = await supabase
-          .from('group_invitations')
-          .select('invitation_code')
-          .eq('group_id', id)
-          .is('invited_email', null)
-          .eq('status', 'pending')
-          .order('created_at', { ascending: true })
+          .from("group_invitations")
+          .select("invitation_code")
+          .eq("group_id", id)
+          .is("invited_email", null)
+          .eq("status", "pending")
+          .order("created_at", { ascending: true })
           .limit(1)
           .single();
 
@@ -229,7 +241,7 @@ class GroupService extends BaseService {
       // Enrich group with computed properties
       const enrichedGroup: Group = {
         ...group,
-        is_admin: membership?.role === 'owner' || membership?.role === 'admin',
+        is_admin: membership?.role === "owner" || membership?.role === "admin",
         member_count: memberCount || 0,
         total_habits: totalHabits,
         active_habits: activeHabits,
@@ -243,27 +255,32 @@ class GroupService extends BaseService {
   }
 
   // Get group details with members
-  async getGroupWithMembers(groupId: string): Promise<ServiceResponse<{
-    group: Group;
-    members: GroupMember[];
-  }>> {
+  async getGroupWithMembers(groupId: string): Promise<
+    ServiceResponse<{
+      group: Group;
+      members: GroupMember[];
+    }>
+  > {
     try {
       // Get group details
       const { data: group, error: groupError } = await supabase
-        .from('groups')
-        .select('*')
-        .eq('id', groupId)
+        .from("groups")
+        .select("*")
+        .eq("id", groupId)
         .single();
 
-
       if (groupError) {
-        return this.createResponse<{ group: Group; members: GroupMember[] }>(null, groupError);
+        return this.createResponse<{ group: Group; members: GroupMember[] }>(
+          null,
+          groupError
+        );
       }
 
       // Get members
       const { data: members, error: membersError } = await supabase
-        .from('group_members')
-        .select(`
+        .from("group_members")
+        .select(
+          `
           *,
           users!inner(
             id,
@@ -271,54 +288,69 @@ class GroupService extends BaseService {
             full_name,
             avatar_url
           )
-        `)
-        .eq('group_id', groupId)
-        .eq('is_active', true);
+        `
+        )
+        .eq("group_id", groupId)
+        .eq("is_active", true);
 
       if (membersError) {
-        return this.createResponse<{ group: Group; members: GroupMember[] }>(null, membersError);
+        return this.createResponse<{ group: Group; members: GroupMember[] }>(
+          null,
+          membersError
+        );
       }
 
       return this.createResponse({ group, members }, null);
     } catch (error) {
-      return this.createResponse<{ group: Group; members: GroupMember[] }>(null, error as Error);
+      return this.createResponse<{ group: Group; members: GroupMember[] }>(
+        null,
+        error as Error
+      );
     }
   }
-  
+
   // Join a group
-  async joinGroup(groupId: string, userId: string): Promise<ServiceResponse<GroupMember>> {
+  async joinGroup(
+    groupId: string,
+    userId: string
+  ): Promise<ServiceResponse<GroupMember>> {
     try {
       // Check if group exists and is active
       const { data: group, error: groupError } = await supabase
-        .from('groups')
-        .select('*')
-        .eq('id', groupId)
-        .eq('is_active', true)
+        .from("groups")
+        .select("*")
+        .eq("id", groupId)
+        .eq("is_active", true)
         .single();
 
-
       if (groupError || !group) {
-        return this.createResponse<GroupMember>(null, new Error('Group not found or inactive'));
+        return this.createResponse<GroupMember>(
+          null,
+          new Error("Group not found or inactive")
+        );
       }
 
       // Check member count
       const { count } = await supabase
-        .from('group_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('group_id', groupId)
-        .eq('is_active', true);
+        .from("group_members")
+        .select("*", { count: "exact", head: true })
+        .eq("group_id", groupId)
+        .eq("is_active", true);
 
       if (count && count >= group.max_members) {
-        return this.createResponse<GroupMember>(null, new Error('Group is full'));
+        return this.createResponse<GroupMember>(
+          null,
+          new Error("Group is full")
+        );
       }
 
       // Add member
       const { data, error } = await supabase
-        .from('group_members')
+        .from("group_members")
         .insert({
           group_id: groupId,
           user_id: userId,
-          role: 'member',
+          role: "member",
           is_active: true,
         })
         .select()
@@ -329,19 +361,22 @@ class GroupService extends BaseService {
       return this.createResponse<GroupMember>(null, error as Error);
     }
   }
-  
+
   // Leave a group
-  async leaveGroup(groupId: string, userId: string): Promise<ServiceResponse<void>> {
+  async leaveGroup(
+    groupId: string,
+    userId: string
+  ): Promise<ServiceResponse<void>> {
     try {
       const { error } = await supabase
-        .from('group_members')
+        .from("group_members")
         .update({
           is_active: false,
           left_at: new Date().toISOString(),
         })
-        .eq('group_id', groupId)
-        .eq('user_id', userId);
-      
+        .eq("group_id", groupId)
+        .eq("user_id", userId);
+
       return this.createResponse(null, error);
     } catch (error) {
       return this.createResponse<void>(null, error as Error);
@@ -358,19 +393,19 @@ class GroupService extends BaseService {
       updated_at: new Date().toISOString(),
     });
   }
-  
+
   // Archive a group
   async archiveGroup(groupId: string): Promise<ServiceResponse<void>> {
     try {
       const { error } = await supabase
-        .from('groups')
+        .from("groups")
         .update({
           is_archived: true,
           is_active: false,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', groupId);
-      
+        .eq("id", groupId);
+
       return this.createResponse(null, error);
     } catch (error) {
       return this.createResponse<void>(null, error as Error);
@@ -386,12 +421,12 @@ class GroupService extends BaseService {
     try {
       // Database trigger will auto-generate invitation_code
       const { data, error } = await supabase
-        .from('group_invitations')
+        .from("group_invitations")
         .insert({
           group_id: groupId,
           invited_email: email,
           invited_by: invitedBy,
-          status: 'pending',
+          status: "pending",
         })
         .select()
         .single();
@@ -408,6 +443,14 @@ class GroupService extends BaseService {
     }
   }
 
+  // Join group with invitation code
+  async joinGroupWithCode(
+    code: string,
+    userId: string
+  ): Promise<ServiceResponse<GroupMember>> {
+    return this.acceptInvitation(code, userId);
+  }
+
   // Accept invitation by code
   async acceptInvitation(
     code: string,
@@ -416,25 +459,30 @@ class GroupService extends BaseService {
     try {
       // Find invitation
       const { data: invitation, error: inviteError } = await supabase
-        .from('group_invitations')
-        .select('*')
-        .eq('invitation_code', code)
-        .eq('status', 'pending')
+        .from("group_invitations")
+        .select("*")
+        .eq("invitation_code", code)
+        .eq("status", "pending")
         .single();
 
-
       if (inviteError || !invitation) {
-        return this.createResponse<GroupMember>(null, new Error('Invalid or expired invitation'));
+        return this.createResponse<GroupMember>(
+          null,
+          new Error("Invalid or expired invitation")
+        );
       }
 
       // Check expiry
       if (new Date(invitation.expires_at) < new Date()) {
         await supabase
-          .from('group_invitations')
-          .update({ status: 'expired' })
-          .eq('id', invitation.id);
+          .from("group_invitations")
+          .update({ status: "expired" })
+          .eq("id", invitation.id);
 
-        return this.createResponse<GroupMember>(null, new Error('Invitation has expired'));
+        return this.createResponse<GroupMember>(
+          null,
+          new Error("Invitation has expired")
+        );
       }
 
       // Join group
@@ -446,51 +494,51 @@ class GroupService extends BaseService {
 
       // Update invitation status
       await supabase
-        .from('group_invitations')
-        .update({ status: 'accepted' })
-        .eq('id', invitation.id);
+        .from("group_invitations")
+        .update({ status: "accepted" })
+        .eq("id", invitation.id);
 
       return joinResult;
     } catch (error) {
       return this.createResponse<GroupMember>(null, error as Error);
     }
   }
-  
+
   // Get group statistics
   async getGroupStats(groupId: string): Promise<ServiceResponse<GroupStats>> {
     try {
       // Get member stats
       const { data: members, error: membersError } = await supabase
-        .from('group_members')
-        .select('*')
-        .eq('group_id', groupId);
+        .from("group_members")
+        .select("*")
+        .eq("group_id", groupId);
 
       if (membersError) {
         return this.createResponse<GroupStats>(null, membersError);
       }
 
       const totalMembers = members.length;
-      const activeMembers = members.filter(m => m.is_active).length;
+      const activeMembers = members.filter((m) => m.is_active).length;
 
       // Get habit stats
       const { data: habits, error: habitsError } = await supabase
-        .from('habits')
-        .select('*')
-        .eq('group_id', groupId);
+        .from("habits")
+        .select("*")
+        .eq("group_id", groupId);
 
       if (habitsError) {
         return this.createResponse<GroupStats>(null, habitsError);
       }
 
       const totalHabits = habits.length;
-      const activeHabits = habits.filter(h => h.is_active).length;
+      const activeHabits = habits.filter((h) => h.is_active).length;
 
       // Get debt stats
       const { data: debts, error: debtsError } = await supabase
-        .from('debts')
-        .select('amount')
-        .eq('group_id', groupId)
-        .eq('is_settled', false);
+        .from("debts")
+        .select("amount")
+        .eq("group_id", groupId)
+        .eq("is_settled", false);
 
       if (debtsError) {
         return this.createResponse<GroupStats>(null, debtsError);
@@ -502,19 +550,22 @@ class GroupService extends BaseService {
       // TODO: Implement proper completion rate calculation
       const completionRate = 0;
 
-      return this.createResponse({
-        total_members: totalMembers,
-        active_members: activeMembers,
-        total_habits: totalHabits,
-        active_habits: activeHabits,
-        total_debt: totalDebt,
-        completion_rate: completionRate,
-      }, null);
+      return this.createResponse(
+        {
+          total_members: totalMembers,
+          active_members: activeMembers,
+          total_habits: totalHabits,
+          active_habits: activeHabits,
+          total_debt: totalDebt,
+          completion_rate: completionRate,
+        },
+        null
+      );
     } catch (error) {
       return this.createResponse<GroupStats>(null, error as Error);
     }
   }
-  
+
   // Subscribe to group updates (real-time)
   subscribeToGroup(
     groupId: string,
@@ -527,55 +578,55 @@ class GroupService extends BaseService {
   ): RealtimeChannel {
     // Unsubscribe from existing subscription if any
     this.unsubscribeFromGroup(groupId);
-    
+
     const channel = supabase
       .channel(`group:${groupId}`)
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'group_members',
+          event: "*",
+          schema: "public",
+          table: "group_members",
           filter: `group_id=eq.${groupId}`,
         },
         callbacks.onMemberChange || (() => {})
       )
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'habits',
+          event: "*",
+          schema: "public",
+          table: "habits",
           filter: `group_id=eq.${groupId}`,
         },
         callbacks.onHabitChange || (() => {})
       )
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'debts',
+          event: "*",
+          schema: "public",
+          table: "debts",
           filter: `group_id=eq.${groupId}`,
         },
         callbacks.onDebtChange || (() => {})
       )
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'groups',
+          event: "UPDATE",
+          schema: "public",
+          table: "groups",
           filter: `id=eq.${groupId}`,
         },
         callbacks.onGroupUpdate || (() => {})
       )
       .subscribe();
-    
+
     this.subscriptions.set(groupId, channel);
     return channel;
   }
-  
+
   // Unsubscribe from group updates
   unsubscribeFromGroup(groupId: string): void {
     const channel = this.subscriptions.get(groupId);
@@ -584,10 +635,10 @@ class GroupService extends BaseService {
       this.subscriptions.delete(groupId);
     }
   }
-  
+
   // Unsubscribe from all groups
   unsubscribeFromAll(): void {
-    this.subscriptions.forEach(channel => channel.unsubscribe());
+    this.subscriptions.forEach((channel) => channel.unsubscribe());
     this.subscriptions.clear();
   }
 }
