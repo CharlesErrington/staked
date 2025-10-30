@@ -2,10 +2,10 @@ import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from 'expo-clipboard';
-import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
-import { groupService } from "../../services/GroupService";
-import type { Group } from "../../services/GroupService";
+import { Button } from "../../../components/ui/Button";
+import { Card } from "../../../components/ui/Card";
+import { groupService } from "../../../services/GroupService";
+import type { Group } from "../../../services/GroupService";
 
 export default function GroupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

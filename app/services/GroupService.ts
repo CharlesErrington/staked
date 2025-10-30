@@ -282,7 +282,7 @@ class GroupService extends BaseService {
         .select(
           `
           *,
-          users!inner(
+          users:user_id(
             id,
             username,
             full_name,
@@ -298,6 +298,40 @@ class GroupService extends BaseService {
           null,
           membersError
         );
+      }
+
+      // Compute balances from debts table (Option B: computed, not stored)
+      const memberIds = members?.map((m) => m.user_id) || [];
+
+      if (memberIds.length > 0) {
+        // Fetch unsettled debts involving any member
+        const { data: debts } = await supabase
+          .from("debts")
+          .select("debtor_id, creditor_id, amount")
+          .eq("group_id", groupId)
+          .eq("is_settled", false);
+
+        // Calculate net balance for each member
+        const balances = new Map<string, number>();
+        memberIds.forEach((id) => balances.set(id, 0));
+
+        debts?.forEach((debt) => {
+          // Creditor gets positive balance (they're owed money)
+          const creditorBalance = balances.get(debt.creditor_id) || 0;
+          balances.set(debt.creditor_id, creditorBalance + Number(debt.amount));
+
+          // Debtor gets negative balance (they owe money)
+          const debtorBalance = balances.get(debt.debtor_id) || 0;
+          balances.set(debt.debtor_id, debtorBalance - Number(debt.amount));
+        });
+
+        // Attach computed balance to each member
+        const membersWithBalance = members.map((m) => ({
+          ...m,
+          balance: balances.get(m.user_id) || 0,
+        }));
+
+        return this.createResponse({ group, members: membersWithBalance }, null);
       }
 
       return this.createResponse({ group, members }, null);
