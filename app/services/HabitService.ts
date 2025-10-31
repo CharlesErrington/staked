@@ -1,6 +1,38 @@
 import { BaseService, ServiceResponse } from './base/BaseService';
 import { supabase } from '../config/supabase';
-import type { Habit, HabitCheckIn } from '../store/habitStore';
+import type { Habit as HabitStore, HabitCheckIn as HabitCheckInStore } from '../store/habitStore';
+
+// Re-export types from store for convenience
+export type { Habit, HabitCheckIn } from '../store/habitStore';
+
+// Database-aligned habit type (uses snake_case for DB fields)
+export interface HabitDB {
+  id: string;
+  name: string;
+  description?: string;
+  frequency: 'daily' | 'weekly' | 'custom';
+  target_count: number;
+  group_id: string;
+  user_id: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  is_active: boolean;
+  stake_amount?: number;
+  color?: string;
+  icon?: string;
+}
+
+// Database-aligned check-in type (uses snake_case for DB fields)
+export interface HabitCheckInDB {
+  id: string;
+  habit_id: string;
+  user_id: string;
+  check_in_date: string; // YYYY-MM-DD format
+  status: 'pending' | 'completed' | 'missed' | 'excused';
+  created_at: string;
+  note?: string;
+}
 
 export interface CreateHabitPayload {
   name: string;
@@ -21,7 +53,12 @@ export interface UpdateHabitPayload extends Partial<CreateHabitPayload> {
 }
 
 export interface CheckInPayload {
-  habitId: string;
+  habitId?: string;
+  habit_id?: string;
+  userId?: string;
+  user_id?: string;
+  check_in_date?: string;
+  status?: 'completed' | 'missed' | 'excused';
   note?: string;
   completedAt?: string;
 }
@@ -128,27 +165,60 @@ export class HabitService extends BaseService {
   }
   
   // Check in for a habit
-  async checkIn(payload: CheckInPayload): Promise<ServiceResponse<HabitCheckIn>> {
+  async checkIn(payload: CheckInPayload): Promise<ServiceResponse<HabitCheckInDB>> {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
         throw new Error('User not authenticated');
       }
-      
-      const checkInData = {
-        habit_id: payload.habitId,
-        user_id: userData.user.id,
-        completed_at: payload.completedAt || new Date().toISOString(),
-        note: payload.note,
-      };
-      
-      const { data, error } = await supabase
-        .from('habit_check_ins')
-        .insert(checkInData)
-        .select()
-        .single();
-      
-      return this.createResponse(data, error);
+
+      // Support both camelCase and snake_case field names
+      const habitId = payload.habit_id || payload.habitId;
+      const userId = payload.user_id || payload.userId || userData.user.id;
+      const checkInDate = payload.check_in_date;
+      const status = payload.status || 'completed';
+
+      if (!habitId) {
+        throw new Error('habitId is required');
+      }
+
+      // If we have check_in_date and status, use check_ins table (new format)
+      if (checkInDate && status) {
+        const checkInData = {
+          habit_id: habitId,
+          user_id: userId,
+          check_in_date: checkInDate,
+          status: status,
+          note: payload.note,
+        };
+
+        // Use upsert to update if already exists for this date
+        const { data, error } = await supabase
+          .from('check_ins')
+          .upsert(checkInData, {
+            onConflict: 'habit_id,user_id,check_in_date',
+          })
+          .select()
+          .single();
+
+        return this.createResponse(data, error);
+      } else {
+        // Legacy format using habit_check_ins table
+        const checkInData = {
+          habit_id: habitId,
+          user_id: userId,
+          completed_at: payload.completedAt || new Date().toISOString(),
+          note: payload.note,
+        };
+
+        const { data, error } = await supabase
+          .from('habit_check_ins')
+          .insert(checkInData)
+          .select()
+          .single();
+
+        return this.createResponse(data, error);
+      }
     } catch (error) {
       return this.createResponse(null, error);
     }
@@ -311,7 +381,48 @@ export class HabitService extends BaseService {
     
     return { current: currentStreak, longest: longestStreak };
   }
-  
+
+  // Get check-ins for a user's habits for a specific week
+  async getWeekCheckIns(
+    userId: string,
+    groupId: string,
+    weekStart: string, // ISO date string YYYY-MM-DD
+    weekEnd: string    // ISO date string YYYY-MM-DD
+  ): Promise<ServiceResponse<HabitCheckInDB[]>> {
+    try {
+      // Get user's habits in the group
+      const { data: habits, error: habitsError } = await supabase
+        .from('habits')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('group_id', groupId)
+        .eq('is_active', true);
+
+      if (habitsError || !habits || habits.length === 0) {
+        return this.createResponse<HabitCheckInDB[]>([], null);
+      }
+
+      const habitIds = habits.map(h => h.id);
+
+      // Get check-ins for those habits within the week
+      const { data, error } = await supabase
+        .from('check_ins')
+        .select('*')
+        .in('habit_id', habitIds)
+        .gte('check_in_date', weekStart)
+        .lte('check_in_date', weekEnd)
+        .order('check_in_date', { ascending: true });
+
+      if (error) {
+        return this.createResponse<HabitCheckInDB[]>(null, error);
+      }
+
+      return this.createResponse(data || [], null);
+    } catch (error) {
+      return this.createResponse<HabitCheckInDB[]>(null, error as Error);
+    }
+  }
+
   // Subscribe to habit updates (real-time)
   subscribeToHabitUpdates(
     groupId: string,

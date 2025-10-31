@@ -9,12 +9,12 @@ import {
   Dimensions
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, IconButton } from "../components/ui/Button";
-import { Card } from "../components/ui/Card";
-import { groupService } from "../services/GroupService";
-import { authService } from "../services/AuthService";
+import { Button, IconButton } from "../../components/ui/Button";
+import { Card } from "../../components/ui/Card";
+import { groupService } from "../../services/GroupService";
+import { authService } from "../../services/AuthService";
 import { useRouter } from "expo-router";
-import type { Group } from "../services/GroupService";
+import type { Group } from "../../services/GroupService";
 
 const { width } = Dimensions.get('window');
 

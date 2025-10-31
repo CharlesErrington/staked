@@ -35,15 +35,17 @@ export default function CreateGroupScreen() {
       // Create the group
       const { data, error } = await groupService.createGroup({
         name: formData.name.trim(),
-        description: formData.description.trim() || null,
-        created_by: session.user.id,
+        description: formData.description.trim() || undefined,
         max_members: parseInt(formData.maxMembers) || 10,
         currency_code: formData.currency,
         settings: {
+          auto_archive_days: 90,
           allow_late_checkins: false,
-          late_penalty_multiplier: 1.5,
-          notification_time: "09:00",
-          timezone: "UTC",
+          notification_settings: {
+            late_penalty_multiplier: 1.5,
+            notification_time: "09:00",
+            timezone: "UTC",
+          }
         }
       });
 
