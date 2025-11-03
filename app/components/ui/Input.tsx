@@ -27,12 +27,13 @@ interface InputProps extends Omit<TextInputProps, 'onChangeText' | 'value'> {
   multiline?: boolean;
   numberOfLines?: number;
   maxLength?: number;
+  required?: boolean;
 }
 
-export const Input: React.FC<InputProps> = ({ 
-  placeholder, 
-  value, 
-  onChangeText, 
+export const Input: React.FC<InputProps> = ({
+  placeholder,
+  value,
+  onChangeText,
   secureTextEntry = false,
   error,
   label,
@@ -47,6 +48,7 @@ export const Input: React.FC<InputProps> = ({
   multiline = false,
   numberOfLines = 1,
   maxLength,
+  required = false,
   ...restProps
 }) => {
   const [isFocused, setIsFocused] = useState(false);
@@ -85,12 +87,12 @@ export const Input: React.FC<InputProps> = ({
   return (
     <View className="mb-4">
       {label && (
-        <Text 
+        <Text
           style={{ color: labelColor }}
           className="font-medium mb-2 text-sm"
         >
           {label}
-          {restProps.required && <Text className="text-error"> *</Text>}
+          {required && <Text className="text-error"> *</Text>}
         </Text>
       )}
       

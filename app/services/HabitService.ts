@@ -5,22 +5,40 @@ import type { Habit as HabitStore, HabitCheckIn as HabitCheckInStore } from '../
 // Re-export types from store for convenience
 export type { Habit, HabitCheckIn } from '../store/habitStore';
 
+// Habit Template type (reusable habit definition)
+export interface HabitTemplate {
+  id: string;
+  user_id: string;
+  name: string;
+  description?: string;
+  frequency: 'daily' | 'weekly';
+  deadline_time: string; // HH:MM:SS format
+  deadline_day?: number; // 0-6, only for weekly (0=Sunday, 6=Saturday)
+  proof_required: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Database-aligned habit type (uses snake_case for DB fields)
 export interface HabitDB {
   id: string;
-  name: string;
-  description?: string;
-  frequency: 'daily' | 'weekly' | 'custom';
-  target_count: number;
+  habit_template_id?: string;
+  name?: string; // Will be deprecated, use template
+  description?: string; // Will be deprecated, use template
+  frequency?: 'daily' | 'weekly' | 'custom'; // Will be deprecated, use template
+  target_count?: number;
   group_id: string;
   user_id: string;
-  created_by: string;
+  created_by?: string;
   created_at: string;
   updated_at: string;
   is_active: boolean;
-  stake_amount?: number;
+  stake_amount: number;
+  skips_allowed: number;
   color?: string;
   icon?: string;
+  // Joined template data
+  habit_templates?: HabitTemplate;
 }
 
 // Database-aligned check-in type (uses snake_case for DB fields)
@@ -34,7 +52,24 @@ export interface HabitCheckInDB {
   note?: string;
 }
 
+export interface CreateHabitTemplatePayload {
+  name: string;
+  description?: string;
+  frequency: 'daily' | 'weekly';
+  deadline_time: string; // HH:MM:SS
+  deadline_day?: number; // 0-6 for weekly
+  proof_required: boolean;
+}
+
 export interface CreateHabitPayload {
+  habit_template_id: string;
+  group_id: string;
+  stake_amount: number;
+  skips_allowed: number;
+}
+
+// Legacy payload (for backward compatibility)
+export interface CreateHabitPayloadLegacy {
   name: string;
   description?: string;
   frequency: 'daily' | 'weekly' | 'custom';
@@ -76,36 +111,130 @@ export class HabitService extends BaseService {
   constructor() {
     super('habits');
   }
-  
+
+  // ===== HABIT TEMPLATE METHODS =====
+
+  // Create a new habit template
+  async createHabitTemplate(payload: CreateHabitTemplatePayload): Promise<ServiceResponse<HabitTemplate>> {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        throw new Error('User not authenticated');
+      }
+
+      const templateData = {
+        ...payload,
+        user_id: userData.user.id,
+      };
+
+      const { data, error } = await supabase
+        .from('habit_templates')
+        .insert(templateData)
+        .select()
+        .single();
+
+      return this.createResponse(data, error);
+    } catch (error) {
+      return this.createResponse<HabitTemplate>(null, error as Error);
+    }
+  }
+
+  // Get all habit templates for the current user
+  async getUserHabitTemplates(): Promise<ServiceResponse<HabitTemplate[]>> {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        throw new Error('User not authenticated');
+      }
+
+      const { data, error } = await supabase
+        .from('habit_templates')
+        .select('*')
+        .eq('user_id', userData.user.id)
+        .order('created_at', { ascending: false });
+
+      return this.createResponse(data, error);
+    } catch (error) {
+      return this.createResponse<HabitTemplate[]>(null, error as Error);
+    }
+  }
+
+  // Get a single habit template by ID
+  async getHabitTemplateById(templateId: string): Promise<ServiceResponse<HabitTemplate>> {
+    try {
+      const { data, error } = await supabase
+        .from('habit_templates')
+        .select('*')
+        .eq('id', templateId)
+        .single();
+
+      return this.createResponse(data, error);
+    } catch (error) {
+      return this.createResponse<HabitTemplate>(null, error as Error);
+    }
+  }
+
+  // Update a habit template
+  async updateHabitTemplate(
+    templateId: string,
+    payload: Partial<CreateHabitTemplatePayload>
+  ): Promise<ServiceResponse<HabitTemplate>> {
+    try {
+      const { data, error } = await supabase
+        .from('habit_templates')
+        .update(payload)
+        .eq('id', templateId)
+        .select()
+        .single();
+
+      return this.createResponse(data, error);
+    } catch (error) {
+      return this.createResponse<HabitTemplate>(null, error as Error);
+    }
+  }
+
+  // Delete a habit template
+  async deleteHabitTemplate(templateId: string): Promise<ServiceResponse<void>> {
+    try {
+      const { error } = await supabase
+        .from('habit_templates')
+        .delete()
+        .eq('id', templateId);
+
+      return this.createResponse(null, error);
+    } catch (error) {
+      return this.createResponse<void>(null, error as Error);
+    }
+  }
+
+  // ===== HABIT METHODS (Updated for templates) =====
+
   // Get all habits for a group
-  async getGroupHabits(groupId: string): Promise<ServiceResponse<Habit[]>> {
+  async getGroupHabits(groupId: string): Promise<ServiceResponse<HabitDB[]>> {
     try {
       const { data, error } = await supabase
         .from(this.tableName)
         .select(`
           *,
-          profiles:created_by (
-            id,
-            username,
-            avatar_url
-          )
+          habit_templates (*)
         `)
         .eq('group_id', groupId)
         .order('created_at', { ascending: false });
-      
+
       return this.createResponse(data, error);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<HabitDB[]>(null, error as Error);
     }
   }
   
   // Get user's habits across all groups
-  async getUserHabits(userId: string): Promise<ServiceResponse<Habit[]>> {
+  async getUserHabits(userId: string): Promise<ServiceResponse<HabitDB[]>> {
     try {
       const { data, error } = await supabase
         .from(this.tableName)
         .select(`
           *,
+          habit_templates (*),
           groups!inner (
             id,
             name,
@@ -114,53 +243,87 @@ export class HabitService extends BaseService {
             )
           )
         `)
-        .eq('groups.group_members.user_id', userId)
+        .eq('user_id', userId)
         .eq('is_active', true)
         .order('created_at', { ascending: false });
-      
+
       return this.createResponse(data, error);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<HabitDB[]>(null, error as Error);
     }
   }
-  
-  // Create a new habit
-  async createHabit(payload: CreateHabitPayload): Promise<ServiceResponse<Habit>> {
+
+  // Create a new habit from a template
+  async createHabit(payload: CreateHabitPayload): Promise<ServiceResponse<HabitDB>> {
     try {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
         throw new Error('User not authenticated');
       }
-      
+
       const habitData = {
-        ...payload,
-        created_by: userData.user.id,
+        habit_template_id: payload.habit_template_id,
+        group_id: payload.group_id,
+        user_id: userData.user.id,
+        stake_amount: payload.stake_amount,
+        skips_allowed: payload.skips_allowed,
         is_active: true,
-        group_id: payload.groupId,
       };
-      
+
       const { data, error } = await supabase
         .from(this.tableName)
         .insert(habitData)
-        .select()
+        .select(`
+          *,
+          habit_templates (*)
+        `)
         .single();
-      
+
       return this.createResponse(data, error);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<HabitDB>(null, error as Error);
     }
   }
-  
+
+  // Create habit template and habit in one transaction
+  async createHabitWithTemplate(
+    templatePayload: CreateHabitTemplatePayload,
+    group_id: string,
+    stake_amount: number,
+    skips_allowed: number
+  ): Promise<ServiceResponse<HabitDB>> {
+    try {
+      // First create the template
+      const { data: template, error: templateError } = await this.createHabitTemplate(templatePayload);
+
+      if (templateError || !template) {
+        return this.createResponse<HabitDB>(null, templateError);
+      }
+
+      // Then create the habit linked to the template
+      const habitPayload: CreateHabitPayload = {
+        habit_template_id: template.id,
+        group_id,
+        stake_amount,
+        skips_allowed,
+      };
+
+      return await this.createHabit(habitPayload);
+    } catch (error) {
+      return this.createResponse<HabitDB>(null, error as Error);
+    }
+  }
+
   // Update a habit
   async updateHabit(
     habitId: string,
     payload: UpdateHabitPayload
-  ): Promise<ServiceResponse<Habit>> {
+  ): Promise<ServiceResponse<HabitDB>> {
     return this.update(habitId, payload);
   }
-  
+
   // Archive/deactivate a habit
-  async archiveHabit(habitId: string): Promise<ServiceResponse<Habit>> {
+  async archiveHabit(habitId: string): Promise<ServiceResponse<HabitDB>> {
     return this.update(habitId, { is_active: false });
   }
   
@@ -220,16 +383,16 @@ export class HabitService extends BaseService {
         return this.createResponse(data, error);
       }
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<HabitCheckInDB>(null, error as Error);
     }
   }
-  
+
   // Get check-ins for a habit
   async getCheckIns(
     habitId: string,
     startDate?: string,
     endDate?: string
-  ): Promise<ServiceResponse<HabitCheckIn[]>> {
+  ): Promise<ServiceResponse<HabitCheckInDB[]>> {
     try {
       let query = supabase
         .from('habit_check_ins')
@@ -243,30 +406,30 @@ export class HabitService extends BaseService {
         `)
         .eq('habit_id', habitId)
         .order('completed_at', { ascending: false });
-      
+
       if (startDate) {
         query = query.gte('completed_at', startDate);
       }
-      
+
       if (endDate) {
         query = query.lte('completed_at', endDate);
       }
-      
+
       const { data, error } = await query;
       return this.createResponse(data, error);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<HabitCheckInDB[]>(null, error as Error);
     }
   }
-  
+
   // Get user's check-ins for today
-  async getTodayCheckIns(userId: string): Promise<ServiceResponse<HabitCheckIn[]>> {
+  async getTodayCheckIns(userId: string): Promise<ServiceResponse<HabitCheckInDB[]>> {
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      
+
       const { data, error } = await supabase
         .from('habit_check_ins')
         .select(`
@@ -282,10 +445,10 @@ export class HabitService extends BaseService {
         .eq('user_id', userId)
         .gte('completed_at', today.toISOString())
         .lt('completed_at', tomorrow.toISOString());
-      
+
       return this.createResponse(data, error);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<HabitCheckInDB[]>(null, error as Error);
     }
   }
   
@@ -301,11 +464,11 @@ export class HabitService extends BaseService {
         .order('completed_at', { ascending: true });
       
       if (error) {
-        return this.createResponse(null, error);
+        return this.createResponse<HabitStats>(null, error);
       }
-      
+
       if (!checkIns || checkIns.length === 0) {
-        return this.createResponse({
+        return this.createResponse<HabitStats>({
           habitId,
           totalCheckIns: 0,
           currentStreak: 0,
@@ -313,10 +476,10 @@ export class HabitService extends BaseService {
           completionRate: 0,
         }, null);
       }
-      
+
       // Calculate streaks
       const streaks = this.calculateStreaks(checkIns.map(c => c.completed_at));
-      
+
       // Calculate completion rate (last 30 days)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -324,8 +487,8 @@ export class HabitService extends BaseService {
         c => new Date(c.completed_at) >= thirtyDaysAgo
       );
       const completionRate = (recentCheckIns.length / 30) * 100;
-      
-      return this.createResponse({
+
+      return this.createResponse<HabitStats>({
         habitId,
         totalCheckIns: checkIns.length,
         currentStreak: streaks.current,
@@ -334,7 +497,7 @@ export class HabitService extends BaseService {
         lastCheckIn: checkIns[checkIns.length - 1]?.completed_at,
       }, null);
     } catch (error) {
-      return this.createResponse(null, error);
+      return this.createResponse<HabitStats>(null, error as Error);
     }
   }
   

@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import {
   habitService,
   type HabitDB,
@@ -49,6 +49,15 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
       fetchHabitsAndCheckIns();
     }
   }, [selectedMember, weekStart]);
+
+  // Refresh habits when the tab comes into focus (e.g., after creating a new habit)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (selectedMember) {
+        fetchHabitsAndCheckIns();
+      }
+    }, [selectedMember, weekStart])
+  );
 
   const initializeTab = async () => {
     setLoading(true);
@@ -255,8 +264,7 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
           <TouchableOpacity
             className="my-4 py-3 px-4 bg-calm-blue-500 rounded-lg"
             onPress={() => {
-              // TODO: Navigate to create habit screen
-              console.log("Add habit - to be implemented");
+              router.push(`/(tabs)/groups/${groupId}/create-habit`);
             }}
           >
             <Text className="text-white font-semibold text-center">
@@ -298,7 +306,9 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
                     className="text-sm font-medium text-text-primary"
                     numberOfLines={2}
                   >
-                    {habit.name}
+                    {habit.habit_templates?.name ||
+                      habit.name ||
+                      "Unnamed Habit"}
                   </Text>
                 </View>
 
