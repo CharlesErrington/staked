@@ -7,4 +7,4 @@ export * from './Error';
 
 // Re-export from ui folder temporarily until migration is complete
 export { Card } from '../ui/Card';
-export { Typography } from '../ui/Typography';
+export { Heading, Body, Caption } from '../ui/Typography';
