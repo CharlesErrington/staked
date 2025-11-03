@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
 import { useRouter } from "expo-router";
-import { habitService, type HabitDB, type HabitCheckInDB } from "../../../../services/HabitService";
+import {
+  habitService,
+  type HabitDB,
+  type HabitCheckInDB,
+} from "../../../../services/HabitService";
 import { groupService } from "../../../../services/GroupService";
 import { authService } from "../../../../services/AuthService";
 import type { GroupMember } from "../../../../services/GroupService";
@@ -21,7 +31,9 @@ interface MemberWithUser extends GroupMember {
 export default function HabitsTab({ groupId }: HabitsTabProps) {
   const router = useRouter();
   const [members, setMembers] = useState<MemberWithUser[]>([]);
-  const [selectedMember, setSelectedMember] = useState<MemberWithUser | null>(null);
+  const [selectedMember, setSelectedMember] = useState<MemberWithUser | null>(
+    null
+  );
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [weekStart, setWeekStart] = useState<Date>(getMonday(new Date()));
   const [habits, setHabits] = useState<HabitDB[]>([]);
@@ -54,8 +66,8 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
 
       // Sort: current user first, then others
       const sorted = [
-        ...membersList.filter(m => m.user_id === session.user.id),
-        ...membersList.filter(m => m.user_id !== session.user.id)
+        ...membersList.filter((m) => m.user_id === session.user.id),
+        ...membersList.filter((m) => m.user_id !== session.user.id),
       ];
 
       setMembers(sorted);
@@ -69,8 +81,10 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
     if (!selectedMember) return;
 
     // Get member's habits
-    const { data: habitsData } = await habitService.getUserHabits(selectedMember.user_id);
-    const groupHabits = habitsData?.filter(h => h.group_id === groupId) || [];
+    const { data: habitsData } = await habitService.getUserHabits(
+      selectedMember.user_id
+    );
+    const groupHabits = habitsData?.filter((h) => h.group_id === groupId) || [];
     setHabits(groupHabits);
 
     // Get check-ins for the week
@@ -109,24 +123,35 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
     return dates;
   };
 
-  const getCheckInForHabitAndDate = (habitId: string, date: Date): HabitCheckInDB | null => {
+  const getCheckInForHabitAndDate = (
+    habitId: string,
+    date: Date
+  ): HabitCheckInDB | null => {
     const dateStr = formatDate(date);
-    return checkIns.find(ci => ci.habit_id === habitId && ci.check_in_date === dateStr) || null;
+    return (
+      checkIns.find(
+        (ci) => ci.habit_id === habitId && ci.check_in_date === dateStr
+      ) || null
+    );
   };
 
-  const handleCheckInClick = async (habit: HabitDB, date: Date, currentStatus: string | null) => {
+  const handleCheckInClick = async (
+    habit: HabitDB,
+    date: Date,
+    currentStatus: string | null
+  ) => {
     // Only allow checking own habits
     if (selectedMember?.user_id !== currentUserId) return;
 
     // Cycle through states: null -> completed -> missed -> excused -> null
-    let newStatus: 'completed' | 'missed' | 'excused' | null = null;
+    let newStatus: "completed" | "missed" | "excused" | null = null;
 
-    if (currentStatus === null || currentStatus === 'pending') {
-      newStatus = 'completed';
-    } else if (currentStatus === 'completed') {
-      newStatus = 'missed';
-    } else if (currentStatus === 'missed') {
-      newStatus = 'excused';
+    if (currentStatus === null || currentStatus === "pending") {
+      newStatus = "completed";
+    } else if (currentStatus === "completed") {
+      newStatus = "missed";
+    } else if (currentStatus === "missed") {
+      newStatus = "excused";
     } else {
       newStatus = null;
     }
@@ -145,11 +170,11 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
   };
 
   const getCheckboxColor = (status: string | null) => {
-    if (!status || status === 'pending') return 'bg-gray-200';
-    if (status === 'completed') return 'bg-green-500';
-    if (status === 'missed') return 'bg-red-500';
-    if (status === 'excused') return 'bg-blue-500';
-    return 'bg-gray-200';
+    if (!status || status === "pending") return "bg-gray-200";
+    if (status === "completed") return "bg-green-500";
+    if (status === "missed") return "bg-red-500";
+    if (status === "excused") return "bg-blue-500";
+    return "bg-gray-200";
   };
 
   const canEditHabit = selectedMember?.user_id === currentUserId;
@@ -170,28 +195,28 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        className="flex-shrink-0 border-b border-gray-200"
+        className="flex-shrink-0 flex-grow-0 border-b border-gray-200"
         contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}
       >
         {members.map((member) => (
           <TouchableOpacity
             key={member.id}
             onPress={() => setSelectedMember(member)}
-            className={`mr-3 px-4 py-2 rounded-full ${
+            className={`mr-3 px-4 py-2 rounded-xl h-9 ${
               selectedMember?.id === member.id
-                ? 'bg-calm-blue-500'
-                : 'bg-gray-100'
+                ? "bg-calm-blue-500"
+                : "bg-gray-100"
             }`}
           >
             <Text
               className={`font-medium ${
                 selectedMember?.id === member.id
-                  ? 'text-white'
-                  : 'text-text-primary'
+                  ? "text-white"
+                  : "text-text-primary"
               }`}
             >
-              {member.users?.username || 'Unknown'}
-              {member.user_id === currentUserId && ' (You)'}
+              {member.users?.username || "Unknown"}
+              {member.user_id === currentUserId && " (You)"}
             </Text>
           </TouchableOpacity>
         ))}
@@ -216,7 +241,9 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
           disabled={!canGoNext}
           className="p-2"
         >
-          <Text className={`text-xl font-bold ${canGoNext ? 'text-calm-blue-500' : 'text-gray-300'}`}>
+          <Text
+            className={`text-xl font-bold ${canGoNext ? "text-calm-blue-500" : "text-gray-300"}`}
+          >
             →
           </Text>
         </TouchableOpacity>
@@ -229,17 +256,21 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
             className="my-4 py-3 px-4 bg-calm-blue-500 rounded-lg"
             onPress={() => {
               // TODO: Navigate to create habit screen
-              console.log('Add habit - to be implemented');
+              console.log("Add habit - to be implemented");
             }}
           >
-            <Text className="text-white font-semibold text-center">+ Add Habit</Text>
+            <Text className="text-white font-semibold text-center">
+              + Add Habit
+            </Text>
           </TouchableOpacity>
         )}
 
         {habits.length === 0 ? (
           <View className="py-12 items-center">
             <Text className="text-text-secondary text-center">
-              {canEditHabit ? 'No habits yet. Add your first habit!' : 'No habits to display.'}
+              {canEditHabit
+                ? "No habits yet. Add your first habit!"
+                : "No habits to display."}
             </Text>
           </View>
         ) : (
@@ -250,7 +281,7 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
               {getWeekDates().map((date, idx) => (
                 <View key={idx} className="w-12 items-center">
                   <Text className="text-xs text-text-secondary font-medium">
-                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'][idx]}
+                    {["M", "T", "W", "T", "F", "S", "S"][idx]}
                   </Text>
                   <Text className="text-xs text-text-secondary">
                     {date.getDate()}
@@ -263,7 +294,10 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
             {habits.map((habit) => (
               <View key={habit.id} className="flex-row items-center mb-3">
                 <View className="w-32 pr-2">
-                  <Text className="text-sm font-medium text-text-primary" numberOfLines={2}>
+                  <Text
+                    className="text-sm font-medium text-text-primary"
+                    numberOfLines={2}
+                  >
                     {habit.name}
                   </Text>
                 </View>
@@ -279,7 +313,9 @@ export default function HabitsTab({ groupId }: HabitsTabProps) {
                       disabled={!canEditHabit}
                       className="w-12 items-center"
                     >
-                      <View className={`w-8 h-8 rounded ${getCheckboxColor(status)}`} />
+                      <View
+                        className={`w-8 h-8 rounded ${getCheckboxColor(status)}`}
+                      />
                     </TouchableOpacity>
                   );
                 })}
@@ -303,15 +339,15 @@ function getMonday(date: Date): Date {
 }
 
 function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return date.toISOString().split("T")[0];
 }
 
 function formatWeekRange(weekStart: Date): string {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
 
-  const startMonth = weekStart.toLocaleDateString('en-US', { month: 'short' });
-  const endMonth = weekEnd.toLocaleDateString('en-US', { month: 'short' });
+  const startMonth = weekStart.toLocaleDateString("en-US", { month: "short" });
+  const endMonth = weekEnd.toLocaleDateString("en-US", { month: "short" });
 
   if (startMonth === endMonth) {
     return `${startMonth} ${weekStart.getDate()}-${weekEnd.getDate()}`;
